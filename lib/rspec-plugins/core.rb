@@ -17,27 +17,24 @@ module RSpec::Plugins
     # This module holds the class methods for the plugin module.
     def self.included(plugin_module)
       plugin_module.extend(ClassMethods)
+
       plugin_module.define_singleton_method :included do |example_group|
 
         plugin = plugin_module::Plugin.new(example_group, plugin_module)
-
-        settings = plugin_module.settings
-        helpers = settings.helpers
-        listeners = settings.listeners
-        hooks =  settings.hooks
-
         example_group.metadata[:plugins] ||= {}
         example_group.metadata[:plugins][plugin_module] = plugin
 
+        settings = plugin_module.settings
+
         # -- define helper methods
-        helpers.values.each do |helper|
+        settings.helpers.values.each do |helper|
           example_group.define_singleton_method helper.signal do |*args|
             helper.block.call(plugin, self, *args)
           end
         end
 
         # -- define listener for formatter events --
-        listeners.values.each do |listener|
+        settings.listeners.values.each do |listener|
           plugin.define_singleton_method(listener.signal) do |*args|
             listener.block.call(plugin, *args)
           end
@@ -48,11 +45,11 @@ module RSpec::Plugins
         # register formatter listeners before all other hooks
         example_group.send :before, :all do
           RSpec.configure do |config|
-            config.reporter.register_listener plugin, *listeners.keys
+            config.reporter.register_listener plugin, *settings.listeners.keys
           end
         end
         # -- register additional hooks
-        hooks.each do |hook|
+        settings.hooks.each do |hook|
           example_group.send hook.position, hook.target do |*args|
             hook.block.call(plugin, *args)
           end
@@ -60,7 +57,7 @@ module RSpec::Plugins
         # remove formatters after all other hooks
         example_group.send :after, :all do
           RSpec.configure do |config|
-            listeners.keys.each do |signal|
+            settings.listeners.keys.each do |signal|
               config.reporter.registered_listeners(signal).delete(plugin)
             end
           end
@@ -69,15 +66,16 @@ module RSpec::Plugins
     end
 
     def method_missing(symbol, *args, &block)
-      if ! methods.index(:plugin_module).nil?
-        listener = plugin_module.settings.listeners[symbol]
-        return listener.block.call(self, *args) if ! listener.nil?
+      listener = respond_to_missing?(symbol, false)
+      if listener
+        return listener.block.call(self, *args)
+      else
+        raise NoMethodError, "non existing method called: #{symbol}"
       end
-      raise NoMethodError, "non existing method called: #{symbol}"
     end
 
     def respond_to_missing?(symbol, include_private)
-      ! plugin_module.settings.listeners[symbol].nil?
+      methods.index(:plugin_module) && plugin_module.settings.listeners[symbol]
     end
 
     class Hook
