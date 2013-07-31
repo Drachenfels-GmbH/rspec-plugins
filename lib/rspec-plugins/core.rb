@@ -1,18 +1,17 @@
 require 'rspec/core'
 require 'ostruct'
 
-=begin
-        * listener registration before(:all)
-        * example_group_started
-        * before(:all) methods added from helpers
-        * example_started
-        * after(:all) methods added from helpers
-        * example_group_finished
-        * listener de-registration after(:all)
-=end
-
 module RSpec::Plugins
   module Core
+
+    class Plugin
+      attr_accessor :example_group, :plugin_module
+
+      def initialize(example_group, plugin_module)
+        @example_group    = example_group
+        @plugin_module    = plugin_module
+      end
+    end
 
     # This module holds the class methods for the plugin module.
     def self.included(plugin_module)
@@ -20,7 +19,9 @@ module RSpec::Plugins
 
       plugin_module.define_singleton_method :included do |example_group|
 
-        plugin = plugin_module::Plugin.new(example_group, plugin_module)
+        plugin_class = plugin_module.const_defined?(:Plugin) ? plugin_module::Plugin : Plugin
+        plugin = plugin_class.new(example_group, plugin_module)
+
         example_group.metadata[:plugins] ||= {}
         example_group.metadata[:plugins][plugin_module] = plugin
 
@@ -43,9 +44,11 @@ module RSpec::Plugins
         # -- define rspec hooks --
         # formatters must be registered and de-registered to let them run per spec
         # register formatter listeners before all other hooks
-        example_group.send :before, :all do
-          RSpec.configure do |config|
-            config.reporter.register_listener plugin, *settings.listeners.keys
+        if ! settings.listeners.empty?
+          example_group.send :before, :all do
+            RSpec.configure do |config|
+              config.reporter.register_listener plugin, *settings.listeners.keys
+            end
           end
         end
         # -- register additional hooks
@@ -55,10 +58,12 @@ module RSpec::Plugins
           end
         end
         # remove formatters after all other hooks
-        example_group.send :after, :all do
-          RSpec.configure do |config|
-            settings.listeners.keys.each do |signal|
-              config.reporter.registered_listeners(signal).delete(plugin)
+        if ! settings.listeners.empty?
+          example_group.send :after, :all do
+            RSpec.configure do |config|
+              settings.listeners.keys.each do |signal|
+                config.reporter.registered_listeners(signal).delete(plugin)
+              end
             end
           end
         end

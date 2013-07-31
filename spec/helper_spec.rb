@@ -3,13 +3,17 @@ require 'spec_helper'
 module TestPlugin
   include RSpec::Plugins::Core
 
-  hook(:before, :all) do |plugin|
-    plugin.storage.foobar = 'foobar'
+  class Plugin < RSpec::Plugins::Core::Plugin
+    attr_accessor :foobar
   end
 
-  helper(:set_value) do |plugin, example_group, key, value|
+  hook(:before, :all) do |plugin|
+    plugin.foobar = 'foobar'
+  end
+
+  helper(:set_foobar) do |plugin, example_group, value|
     example_group.before(:all) do
-      plugin.storage.send "#{key}=".to_sym, value
+      plugin.foobar = value
     end
   end
 end
@@ -19,30 +23,30 @@ describe "-- spec #1 --" do
     include TestPlugin
 
     describe "#storage" do
-      subject { storage }
+      subject { example.metadata[:plugins][TestPlugin] }
       its(:foobar) { should eq('foobar')}
 
       describe "#storage" do
-        subject { storage }
+        subject { example.metadata[:plugins][TestPlugin] }
         its(:foobar) { should eq('foobar')}
       end
     end
 
     describe "store(:foobar, 'baz')" do
-      set_value :foobar, 'baz'
+      set_foobar 'baz'
       describe '#storage' do
-        subject { storage }
+        subject { example.metadata[:plugins][TestPlugin] }
         its(:foobar) { should eq('baz')}
 
         describe '#storage' do
-          subject { storage }
+          subject { example.metadata[:plugins][TestPlugin] }
           its(:foobar) { should eq('baz')}
         end
       end
     end
 
     describe '#storage' do
-      subject { storage }
+      subject { example.metadata[:plugins][TestPlugin] }
       its(:foobar) { should eq('baz')}
     end
   end
@@ -52,7 +56,7 @@ describe "-- spec #2 --" do
   describe TestPlugin do
     include TestPlugin
     describe '#storage' do
-      subject { storage }
+      subject { example.metadata[:plugins][TestPlugin] }
       its(:foobar) { should eq('foobar')}
     end
   end
