@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'rspec-plugins/factory_girl_plugin'
 
 describe RSpec::Plugins::FactoryGirlPlugin do
 
