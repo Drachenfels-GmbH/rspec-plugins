@@ -6,7 +6,6 @@ module RSpec::Plugins
 
     class Plugin
       attr_accessor :example_group, :plugin_module
-
       def initialize(example_group, plugin_module)
         @example_group    = example_group
         @plugin_module    = plugin_module
@@ -16,16 +15,12 @@ module RSpec::Plugins
     # This module holds the class methods for the plugin module.
     def self.included(plugin_module)
       plugin_module.extend(ClassMethods)
-
       plugin_module.define_singleton_method :included do |example_group|
 
-        plugin_class = plugin_module.const_defined?(:Plugin) ? plugin_module::Plugin : Plugin
-        plugin = plugin_class.new(example_group, plugin_module)
-
+        settings = plugin_module.settings
+        plugin = settings.plugin_class.new
         example_group.metadata[:plugins] ||= {}
         example_group.metadata[:plugins][plugin_module] = plugin
-
-        settings = plugin_module.settings
 
         # -- define helper methods
         settings.helpers.values.each do |helper|
@@ -71,11 +66,10 @@ module RSpec::Plugins
     end
 
     def method_missing(symbol, *args, &block)
+      super
       listener = respond_to_missing?(symbol, false)
       if listener
         return listener.block.call(self, *args)
-      else
-        raise NoMethodError, "non existing method called: #{symbol}"
       end
     end
 
@@ -107,7 +101,8 @@ module RSpec::Plugins
             {:listeners    => {},
              :helpers      => {},
              :hooks        => [],
-             :id          => id
+             :id          => id,
+             :plugin_class => Plugin
             })
       end
 
