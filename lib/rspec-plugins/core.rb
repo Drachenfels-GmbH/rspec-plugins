@@ -3,125 +3,77 @@ require 'ostruct'
 
 module RSpec::Plugins
   module Core
-
-    class Plugin
-      attr_accessor :example_group, :plugin_module
-      def initialize(example_group, plugin_module)
-        @example_group    = example_group
-        @plugin_module    = plugin_module
+    def self.included(example_group)
+      plugins = Proxy.new(example_group)
+      example_group.metadata[:plugins] = plugins
+      example_group.define_singleton_method(:plugins) { plugins }
+      example_group.define_singleton_method :plugin do |plugin_id, meth, *args, &block|
+        current_example_group = self
+        plugin = plugins[plugin_id]
+        current_example_group.before(:all) do
+          plugin.current_example_group = current_example_group
+          plugin.send(meth, *args, &block)
+        end
       end
+      puts "Enabled RSpec::Plugins"
+    end
+  end
+
+  class Proxy
+    attr_reader :plugins
+    def initialize(example_group)
+      @example_group = example_group
+      @plugins       = {}
     end
 
-    # This module holds the class methods for the plugin module.
-    def self.included(plugin_module)
-      plugin_module.extend(ClassMethods)
-      plugin_module.define_singleton_method :included do |example_group|
+    def [](key)
+      @plugins[key]
+    end
 
-        settings = plugin_module.settings
-        plugin = settings.plugin_class.new
-        example_group.metadata[:plugins] ||= {}
-        example_group.metadata[:plugins][plugin_module] = plugin
-
-        # -- define helper methods
-        settings.helpers.values.each do |helper|
-          example_group.define_singleton_method helper.signal do |*args|
-            helper.block.call(plugin, self, *args)
-          end
+    def enable(enable_plugins)
+      proxy = self
+      enable_plugins.each_pair do |key, plugin|
+        puts "Add plugin :#{key} to #{self}"
+        # TODO check for duplicates
+        @plugins[key] = plugin
+        @example_group.send :before, :all do |running_example_group|
+          puts "Enable plugin: #{key}"
+          plugin       = proxy.plugins[key]
+          plugin.proxy = proxy
+          plugin.enable(running_example_group)
         end
-
-        # -- define listener for formatter events --
-        settings.listeners.values.each do |listener|
-          plugin.define_singleton_method(listener.signal) do |*args|
-            listener.block.call(plugin, *args)
-          end
-        end
-
-        # -- define rspec hooks --
-        # formatters must be registered and de-registered to let them run per spec
-        # register formatter listeners before all other hooks
-        if ! settings.listeners.empty?
-          example_group.send :before, :all do
-            RSpec.configure do |config|
-              config.reporter.register_listener plugin, *settings.listeners.keys
-            end
-          end
-        end
-        # -- register additional hooks
-        settings.hooks.each do |hook|
-          example_group.send hook.position, hook.target do |*args|
-            hook.block.call(plugin, *args)
-          end
-        end
-        # remove formatters after all other hooks
-        if ! settings.listeners.empty?
-          example_group.send :after, :all do
-            RSpec.configure do |config|
-              settings.listeners.keys.each do |signal|
-                config.reporter.registered_listeners(signal).delete(plugin)
-              end
-            end
-          end
+        @example_group.send :after, :all do |running_example_group|
+          puts "Disable plugin: #{key}"
+          proxy.plugins[key].disable(running_example_group)
+          proxy.plugins.delete(key)
         end
       end
     end
+  end
 
-    def method_missing(symbol, *args, &block)
-      super
-      listener = respond_to_missing?(symbol, false)
-      if listener
-        return listener.block.call(self, *args)
-      end
+  class Base
+    attr_accessor :enabled, :example_group, :proxy, :current_example_group
+
+    def initialize
+      @enabled = false
+      @proxy = nil
+      @current_example_group = nil
     end
 
-    def respond_to_missing?(symbol, include_private)
-      methods.index(:plugin_module) && plugin_module.settings.listeners[symbol]
+    def enable(example_group)
+      puts "ENABLED #{self} #{example_group} #{@proxy}"
+      @enabled = true
+      @example_group   = example_group
     end
 
-    class Hook
-      attr_accessor :position, :target, :block
-      def initialize(method, target, &block)
-        @position = method
-        @target = target
-        @block = block
-      end
+    def disable(example_group)
+      puts "DISABLED #{self} #{example_group} #{@proxy}"
     end
 
-    class Listener
-      attr_accessor :signal, :block
-      def initialize(signal, &block)
-        @signal = signal
-        @block = block
-      end
-    end
-
-    module ClassMethods
-      def settings
-        id = self.to_s.to_sym
-        Thread.current[id] ||= OpenStruct.new(
-            {:listeners    => {},
-             :helpers      => {},
-             :hooks        => [],
-             :id          => id,
-             :plugin_class => Plugin
-            })
-      end
-
-      def hook(position, target, &block)
-        settings.hooks << Hook.new(position, target, &block)
-      end
-
-      # Register a notification callback.
-      # {RSpec Reporter Notifications}[rdoc-href:RSpec::Core::Reporter::NOTIFICATIONS]
-      # for a list of available notifications. The :close notification is reserved for
-      # the plugin cleanup hook.
-      def on(signal, &block)
-        settings.listeners[signal] = Listener.new(signal, &block)
-      end
-
-      # Register a helper method for the example group an example group helper method.
-      # Call #helpers to get the list of defined helper methods.
-      def helper(method_name, &block)
-        settings.helpers[method_name] =  Listener.new(method_name, &block)
+    def after(*args, &block)
+      plugin = self
+      @current_example_group.send :after, :all  do
+        block.call(plugin, *args)
       end
     end
   end
