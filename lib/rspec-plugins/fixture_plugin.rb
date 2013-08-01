@@ -2,22 +2,16 @@
 require_relative 'core'
 
 module RSpec::Plugins
-  module FixturePlugin
+  class FixturePlugin < RSpec::Plugins::Base
 
-    class Plugin
       attr_reader :loaded_fixtures, :added_fixtures, :reload_fixtures
-      attr_accessor :fixture_manager
 
       def initialize
+        super
         @added_fixtures   = []
         @loaded_fixtures  = {}
         @removed_fixtures = {}
         @reload_fixtures  = false
-        @fixture_manager = NullFixtureManager.new
-      end
-
-      def add(fixture_id)
-        @added_fixtures << fixture_id
       end
 
       def remove(fixture_id)
@@ -25,7 +19,7 @@ module RSpec::Plugins
       end
 
       def load
-        #puts "... loading #{@added_fixtures}"
+        log "... loading #{@added_fixtures}"
         @added_fixtures.each do |fixture_id|
           @loaded_fixtures[fixture_id] = @fixture_manager.create(fixture_id)
 
@@ -49,36 +43,30 @@ module RSpec::Plugins
         end
         @removed_fixtures.clear
       end
+
+    def reload
+      log "RELOAD"
     end
 
-    class NullFixtureManager
-      def create(fixture_name)
-        puts "CREATE #{fixture_name}"
-        fixture_name
-      end
-
-      def reload(fixture)
-        puts "RELOAD #{fixture}"
-      end
-
-      def truncate_tables
-        puts "TRUNCATE TABLES"
-      end
+    def create(fixture_name)
+      log "CREATE #{fixture_name}"
+      nil
     end
 
-    include RSpec::Plugins::Core
-
-    settings.plugin_class = Plugin
-
-    hook :before, :each do |plugin, example|
-      plugin.reload
-      plugin.load
-      #puts "Loaded fixtures: #{plugin.loaded_fixtures.keys}"
+    def truncate_tables
+      puts "TRUNCATE TABLES"
     end
 
-    helper :with_fixture do |plugin, example_group, fixture_id|
-      example_group.before(:all) { plugin.add(fixture_id) }
-      example_group.after(:all) { plugin.remove(fixture_id) }
+    def around(example)
+        reload
+        load
+    end
+
+    def add(fixture_id)
+      @added_fixtures << fixture_id
+      after do |plugin|
+        plugin.remove(fixture_id)
+      end
     end
   end
 end
