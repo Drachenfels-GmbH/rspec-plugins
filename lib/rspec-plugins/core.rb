@@ -25,8 +25,8 @@ module RSpec::Plugins
           else
             current_example_group.before(:all) do
               plugin.current_example_group = current_example_group
-              Core.log("Calling plugin method #{plugin}##{meth}")
-              plugin.send(meth, *args, &block)
+              Core.log("Dispatch plugin method #{plugin}##{meth}")
+              plugin.dispatch(meth, *args, &block)
             end
           end
         end
@@ -94,6 +94,10 @@ module RSpec::Plugins
 
     def disable
       @enabled = false
+    end
+
+    def dispatch(meth, *args, &block)
+      send meth, *args, &block
     end
 
     def after(*args, &block)
