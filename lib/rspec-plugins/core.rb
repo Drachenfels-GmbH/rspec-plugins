@@ -15,16 +15,20 @@ module RSpec::Plugins
       end
 
       def included(example_group)
-        plugins                          = Proxy.new(example_group)
-        example_group.metadata[:plugins] = plugins
-        example_group.define_singleton_method(:plugins) { plugins }
+        proxy = Proxy.new(example_group)
+        example_group.metadata[:plugins] = proxy
+        example_group.define_singleton_method(:plugins) { proxy }
         example_group.define_singleton_method :plugin do |plugin_id, meth, *args, &block|
           current_example_group = self
-          plugin = plugins[plugin_id]
-          current_example_group.before(:all) do
-            plugin.current_example_group = current_example_group
-            Core.log("Calling plugin method #{plugin}##{meth}")
-            plugin.send(meth, *args, &block)
+          plugin = proxy[plugin_id]
+          if plugin.nil?
+              raise("No plugin with id :#{plugin_id} enabled. Enabled plugins: #{proxy.plugins.keys}")
+          else
+            current_example_group.before(:all) do
+              plugin.current_example_group = current_example_group
+              Core.log("Calling plugin method #{plugin}##{meth}")
+              plugin.send(meth, *args, &block)
+            end
           end
         end
         log "Included RSpec::Plugins in example group [#{example_group.description}]"
@@ -52,13 +56,17 @@ module RSpec::Plugins
         # TODO check for duplicates
         @plugins[key] = plugin
         @example_group.send :before, :all do |running_example_group|
-          plugin = proxy.plugins[key]
           plugin.current_example_group = running_example_group
           plugin.enable
           Core.log "Enabled plugin :#{key}"
         end
+        if plugin.respond_to?(:around)
+          @example_group.send :around, :each do |running_example|
+            Core.log "Calling #{plugin}#around"
+            plugin.around(running_example)
+          end
+        end
         @example_group.send :after, :all do |running_example_group|
-          plugin = proxy.plugins[key]
           plugin.current_example_group = running_example_group
           plugin.disable
           proxy.plugins.delete(key)
@@ -70,6 +78,10 @@ module RSpec::Plugins
 
   class Base
     attr_accessor :enabled, :proxy, :current_example_group
+
+    def log(message)
+      Core.log(message)
+    end
 
     def initialize
       @enabled = false
