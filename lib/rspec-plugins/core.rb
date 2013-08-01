@@ -1,5 +1,4 @@
 require 'rspec/core'
-require 'ostruct'
 
 module RSpec::Plugins
   module Core
@@ -31,7 +30,7 @@ module RSpec::Plugins
             end
           end
         end
-        log "Included RSpec::Plugins in example group [#{example_group.description}]"
+        log "Included RSpec::Plugins::Core in example group [#{example_group.description}]"
       end
     end
   end
