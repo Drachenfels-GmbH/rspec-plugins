@@ -2,20 +2,43 @@ rspec-plugins
 =============
 
 A simple plugin mechanism for RSpec.
+Make your hooks reusable through a plugin module.
 
-Make your hooks reusable through a plugin module or easily create a custom formatter.
+```ruby
+include 'rspec-plugins'
 
-Please have a look at the specs for now ;)
+class SimpleCounter < RSpec::Plugins::Base
+  attr_accessor :count
 
+  def initialize
+    super
+    @counter = 0
+  end
 
-# plugin listener/hook/helper call order
+  def increment(value = 1)
+    @count += value
+  end
+end
 
-* helper method code
-* formatter registration in a before(:all) hook
-* formatter event :example_group_started
-* before(:all) hooks added from helpers
-* formatter event :example_started
-* after(:all) hooks added from helpers
-* formatter event :example_group_finished
-* formatter de-registration in an after(:all) hook
+RSpec::Plugins::Core.debug = true
 
+describe SimpleCounter do
+  include RSpec::Plugins::Core
+  plugins.enable :counter => SimpleCounter.new
+
+  plugin :counter, :increment
+  plugin :counter, :increment, 5
+end
+```
+
+# usage
+
+Please please have a look at the specs for now [(Counter Plugin Spec)](spec/counter_plugin_spec.rb).
+
+## debugging
+
+To enable debugging:
+
+```ruby
+RSpec::Plugins::Core.debug = true
+```
