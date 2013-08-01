@@ -13,6 +13,8 @@ class CounterPlugin < RSpec::Plugins::Base
   end
 end
 
+RSpec::Plugins::Core.debug = true
+
 describe '-- #1 plugins' do
   include RSpec::Plugins::Core
   plugins.enable :counter => CounterPlugin.new
