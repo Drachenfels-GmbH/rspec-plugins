@@ -1,64 +1,85 @@
 require 'spec_helper'
 require 'rspec-plugins/fixture_plugin'
 
-
-#ActiveRecord::Base.connection.tables.each do |table|
-#  log.debug "Truncating #{table}"
-#  ActiveRecord::Base.connection.execute("TRUNCATE TABLE #{table};")
-#end
-
 class FixtureTestPlugin < RSpec::Plugins::FixturePlugin
 
+  def reload(fixture_sym)
+    log "RELOAD #{fixture_sym}"
+    fixture_sym.to_s
+  end
+
+  def create(fixture_sym)
+    log "CREATE #{fixture_sym}"
+    fixture_sym.to_s
+  end
+
+  def truncate_tables
+    log "TRUNCATE TABLES"
+  end
 end
+
+RSpec::Plugins::Core.debug = true
 
 describe RSpec::Plugins::FixturePlugin do
   include RSpec::Plugins::Core
   plugins.enable :fixtures => FixtureTestPlugin.new
-  
+
   let(:plugin) { example.metadata[:plugins][:fixtures] }
 
-  context ":load :hello, :helllo1" do
-    plugin :fixtures, :load, :hello
-    plugin :fixtures, :load, :hello1
+  describe "plugin" do
+    subject { plugin }
+    its(:loaded) { should be_empty }
+    its(:pending) { should be_empty }
+    its(:unloaded) { should be_empty }
+    its(:reloaded) { should be_empty }
+  end
+
+  context "load :rule, load :rule1" do
+    plugin :fixtures, :load, :rule
+    plugin :fixtures, :load, :rule1
 
     describe "plugin" do
       subject { plugin }
-      its(:loaded_fixtures) { should eq([:hello, :hello1]) }
-      #its(:removed) { should eq([]) }
-      #its(:reloaded) { should eq([]) }
+      its(:loaded) { should eq({:rule => 'rule', :rule1 => 'rule1'}) }
+      its(:pending) { should be_empty }
+      its(:unloaded) { should be_empty }
+      its(:reloaded) { should be_empty }
     end
 
-    #context "with_fixture(:world)" do
-    #  plugin :fixture, :load, :world
-    #
-    #  describe "plugin" do
-    #    subject { plugin }
-    #    its(:loaded) { should eq([:hello, :hello1, :world]) }
-    #    its(:removed) { should eq([]) }
-    #    its(:reloaded) { should eq([]) }
-    #  end
-    #end
-    #
-    #context "with_fixture(:rspec)" do
-    #  plugin :fixture, :load, :rspec
-    #
-    #  describe "plugin" do
-    #    subject { plugin }
-    #    its(:loaded) { should eq([:hello, :hello1, :rspec]) }
-    #    its(:removed) { should eq([:world]) }
-    #    its(:reloaded) { should eq([:hello, :hello1]) }
-    #  end
+    context "load :rule2" do
+      plugin :fixtures, :load, :rule2
+
+      describe "plugin" do
+        subject { plugin }
+        its(:loaded) { should eq({:rule => 'rule', :rule1 => 'rule1', :rule2 => 'rule2'}) }
+        its(:pending) { should be_empty }
+        its(:unloaded) { should be_empty }
+        its(:reloaded) { should be_empty }
+      end
+    end
+
+    context "load :rule3" do
+      plugin :fixtures, :load, :rule3
+
+      describe "plugin" do
+        subject { plugin }
+        its(:loaded) { should eq({:rule => 'rule', :rule1 => 'rule1', :rule3 => 'rule3'}) }
+        its(:pending) { should be_empty }
+        its(:unloaded) { should be_empty }
+        its(:reloaded) { should eq([:rule, :rule1]) }
+      end
     end
   end
 
-  #context "with_fixture(:rspec)" do
-  #  plugin :fixture, :load, :rspec
-  #
-  #  describe "plugin" do
-  #    subject { plugin }
-  #    its(:loaded) { should eq([:rspec]) }
-  #    its(:removed) { should eq([]) }
-  #    its(:reloaded) { should eq([]) }
-  #  end
-  #end
-#end
+  context ":load :rule4, " do
+    plugin :fixtures, :load, :rule4
+
+    describe "plugin" do
+      subject { plugin }
+      its(:loaded) { should eq({:rule4 => 'rule4'}) }
+      its(:pending) { should be_empty }
+      its(:unloaded) { should be_empty }
+      its(:reloaded) { should be_empty }
+    end
+  end
+end

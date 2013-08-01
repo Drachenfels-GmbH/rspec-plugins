@@ -1,72 +1,66 @@
-#require 'factory_girl'
 require_relative 'core'
 
 module RSpec::Plugins
   class FixturePlugin < RSpec::Plugins::Base
 
-      attr_reader :loaded_fixtures, :added_fixtures, :reload_fixtures
+    # TODO embed status into a Fixture class ?
+    attr_reader :pending, :loaded, :unloaded, :reloaded
 
-      def initialize
-        super
-        @added_fixtures   = []
-        @loaded_fixtures  = {}
-        @removed_fixtures = {}
-        @reload_fixtures  = false
+    def initialize
+      super
+      @pending  = []
+      @load_order = []
+      @loaded   = {}
+      @unloaded = {}
+      @reloaded = []
+    end
+
+    # Marks the given fixture pending to next #migrate.
+    # Schedules the fixture removal after the example group.
+    def load(fixture_sym)
+      @pending << fixture_sym
+      after do |plugin|
+        plugin.unload(fixture_sym)
       end
+    end
 
-      def remove(fixture_id)
-        @removed_fixtures[fixture_id] = @loaded_fixtures.delete(fixture_id)
-      end
+    # Moves the fixture from loaded to unloaded.
+    def unload(fixture_sym)
+      log "unloading #{fixture_sym}"
+      @unloaded[fixture_sym] = @loaded.delete(fixture_sym)
+      @load_order.delete(fixture_sym)
+    end
 
-      def load
-        log "... loading #{@added_fixtures}"
-        @added_fixtures.each do |fixture_id|
-          @loaded_fixtures[fixture_id] = @fixture_manager.create(fixture_id)
-
+    def load_pending
+      if ! @pending.empty?
+        log "load pending #{@pending}"
+        @pending.each do |fixture_sym|
+          @loaded[fixture_sym] = create(fixture_sym)
+          @load_order << fixture_sym
         end
-        @added_fixtures.clear
+        @pending.clear
       end
+    end
 
-      def reload_required?
-        !@removed_fixtures.empty?
-      end
-
-      def reload
-        if reload_required?
-          @fixture_manager.truncate_tables
-          if ! @loaded_fixtures.empty?
-            #puts "... reloading #{@loaded_fixtures.keys}"
-            @loaded_fixtures.keys.each do |fixture_id|
-              @fixture_manager.reload(@loaded_fixtures[fixture_id])
-            end
+    def migrate
+      if ! @unloaded.empty?
+        truncate_tables
+        @reloaded.clear
+        if ! @loaded.empty?
+          log "Reloading fixtures: #{@load_order}"
+          @load_order.each do |fixture_sym|
+            @loaded[fixture_sym] = reload(fixture_sym)
+            @reloaded << fixture_sym
           end
         end
-        @removed_fixtures.clear
+        @unloaded.clear
       end
-
-    def reload
-      log "RELOAD"
-    end
-
-    def create(fixture_name)
-      log "CREATE #{fixture_name}"
-      nil
-    end
-
-    def truncate_tables
-      puts "TRUNCATE TABLES"
     end
 
     def around(example)
-        reload
-        load
-    end
-
-    def add(fixture_id)
-      @added_fixtures << fixture_id
-      after do |plugin|
-        plugin.remove(fixture_id)
-      end
+      migrate
+      load_pending
+      example.run
     end
   end
 end
