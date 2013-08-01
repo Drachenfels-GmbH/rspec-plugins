@@ -52,6 +52,7 @@ module RSpec::Plugins
       enable_plugins.each_pair do |key, plugin|
         Core.log "Add plugin :#{key}"
         plugin.proxy = proxy
+        plugin.id = key
         # TODO check for duplicates
         @plugins[key] = plugin
         @example_group.send :before, :all do |running_example_group|
@@ -76,13 +77,10 @@ module RSpec::Plugins
   end
 
   class Base
-    attr_accessor :enabled, :proxy, :current_example_group
-
-    def log(message)
-      Core.log(message)
-    end
+    attr_accessor :id, :enabled, :proxy, :current_example_group
 
     def initialize
+      @id = nil
       @enabled = false
       @proxy = nil
       @current_example_group = nil
@@ -98,6 +96,11 @@ module RSpec::Plugins
 
     def dispatch(meth, *args, &block)
       send meth, *args, &block
+    end
+
+  private
+    def log(message)
+      Core.log "plugin[#{id}]: #{message}"
     end
 
     def after(*args, &block)
