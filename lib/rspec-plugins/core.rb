@@ -20,10 +20,11 @@ module RSpec::Plugins
   end
 
   class Proxy
-    attr_reader :plugins
+    attr_reader :plugins, :example_group
+
     def initialize(example_group)
       @example_group = example_group
-      @plugins       = {}
+      @plugins = {}
     end
 
     def [](key)
@@ -34,17 +35,20 @@ module RSpec::Plugins
       proxy = self
       enable_plugins.each_pair do |key, plugin|
         puts "Add plugin :#{key} to #{self}"
+        plugin.proxy = proxy
         # TODO check for duplicates
         @plugins[key] = plugin
         @example_group.send :before, :all do |running_example_group|
           puts "Enable plugin: #{key}"
-          plugin       = proxy.plugins[key]
-          plugin.proxy = proxy
-          plugin.enable(running_example_group)
+          plugin = proxy.plugins[key]
+          plugin.current_example_group = running_example_group
+          plugin.enable
         end
         @example_group.send :after, :all do |running_example_group|
           puts "Disable plugin: #{key}"
-          proxy.plugins[key].disable(running_example_group)
+          plugin = proxy.plugins[key]
+          plugin.current_example_group = running_example_group
+          plugin.disable
           proxy.plugins.delete(key)
         end
       end
@@ -52,7 +56,7 @@ module RSpec::Plugins
   end
 
   class Base
-    attr_accessor :enabled, :example_group, :proxy, :current_example_group
+    attr_accessor :enabled, :proxy, :current_example_group
 
     def initialize
       @enabled = false
@@ -60,14 +64,12 @@ module RSpec::Plugins
       @current_example_group = nil
     end
 
-    def enable(example_group)
-      puts "ENABLED #{self} #{example_group} #{@proxy}"
+    def enable
       @enabled = true
-      @example_group   = example_group
     end
 
-    def disable(example_group)
-      puts "DISABLED #{self} #{example_group} #{@proxy}"
+    def disable
+      @enabled = false
     end
 
     def after(*args, &block)

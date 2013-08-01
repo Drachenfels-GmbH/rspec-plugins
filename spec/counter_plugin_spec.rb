@@ -9,37 +9,61 @@ class CounterPlugin < RSpec::Plugins::Base
   end
 
   def increment
-    puts "COUNT #{@counter}"
-    after(@counter) do |plugin, captured_counter|
-      puts "#{captured_counter} --> #{plugin.counter}"
-    end
     @counter += 1
   end
 end
 
 describe '-- #1 plugins' do
   include RSpec::Plugins::Core
+  plugins.enable :counter => CounterPlugin.new
+  plugins.enable :counter2 => CounterPlugin.new
 
   let(:plugins) { example.metadata[:plugins] }
-  plugins.enable :counter => CounterPlugin.new
 
-  describe "#plugins" do
+  context "counter.increment 2, counter2.increment 1" do
     plugin :counter, :increment
     plugin :counter, :increment
+    plugin :counter2, :increment
 
-    subject { plugins[:counter] }
-    its(:counter) { should eq(2) }
-
-    describe "#plugins" do
-      plugin :counter, :increment
-      plugin :counter, :increment
+    describe "plugin :counter" do
       subject { plugins[:counter] }
-      its(:counter) { should eq(4) }
+      its(:counter) { should eq(2) }
     end
 
-    describe "#plugins" do
+    describe "plugin :counter2" do
+      subject { plugins[:counter2] }
+      its(:counter) { should eq(1) }
+    end
+
+    context "counter.increment 1, counter2.increment 2" do
+      plugin :counter, :increment
+      plugin :counter2, :increment
+      plugin :counter2, :increment
+
+      describe "plugin :counter" do
+        subject { plugins[:counter] }
+        its(:counter) { should eq(3) }
+      end
+
+      describe "plugin :counter2" do
+        subject { plugins[:counter2] }
+        its(:counter) { should eq(3) }
+      end
+    end
+  end
+
+  context "counter2.increment 2" do
+    plugin :counter2, :increment
+    plugin :counter2, :increment
+
+    describe "plugin :counter" do
       subject { plugins[:counter] }
-      its(:counter) { should eq(4) }
+      its(:counter) { should eq(3) }
+    end
+
+    describe "plugin :counter2" do
+      subject { plugins[:counter2] }
+      its(:counter) { should eq(5) }
     end
   end
 end
