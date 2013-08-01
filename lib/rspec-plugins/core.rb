@@ -60,7 +60,7 @@ module RSpec::Plugins
           Core.log "Enabled plugin :#{key}"
         end
         if plugin.respond_to?(:around)
-          @example_group.send :around, :each do
+          @example_group.send :around, :each do |example|
             Core.log "Calling #{plugin}#around"
             plugin.around(example)
           end
