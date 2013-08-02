@@ -2,6 +2,9 @@ require 'rspec/core'
 
 module RSpec::Plugins
   module Core
+
+    class NoPluginError < NameError; end
+
     class << self
       attr_accessor :debug
 
@@ -18,17 +21,7 @@ module RSpec::Plugins
         example_group.metadata[:plugins] = proxy
         example_group.define_singleton_method(:plugins) { proxy }
         example_group.define_singleton_method :plugin do |plugin_id, meth, *args, &block|
-          current_example_group = self
-          plugin = proxy[plugin_id]
-          if plugin.nil?
-              raise("No plugin with id :#{plugin_id} enabled. Enabled plugins: #{proxy.plugins.keys}")
-          else
-            current_example_group.before(:all) do
-              plugin.current_example_group = current_example_group
-              Core.log("Dispatch plugin method #{plugin}##{meth}")
-              plugin.dispatch(meth, *args, &block)
-            end
-          end
+          proxy.dispatch(self, plugin_id, meth, *args, &block)
         end
         log "Included RSpec::Plugins::Core in example group [#{example_group.description}]"
       end
@@ -43,8 +36,8 @@ module RSpec::Plugins
       @plugins = {}
     end
 
-    def [](key)
-      @plugins[key]
+    def [](plugin_id)
+      @plugins[plugin_id]
     end
 
     def enable(enable_plugins)
@@ -72,6 +65,19 @@ module RSpec::Plugins
           proxy.plugins.delete(key)
           Core.log "Disabled plugin :#{key}"
         end
+      end
+    end
+
+    def dispatch(current_example_group, plugin_id, meth, *args, &block)
+      plugin = @plugins[plugin_id]
+      if plugin
+        current_example_group.before(:all) do
+          plugin.current_example_group = current_example_group
+          Core.log "Dispatching method :#{meth} to #{plugin}"
+          plugin.dispatch(meth, *args, &block)
+        end
+      else
+        raise Core::NoPluginError, "Plugin :#{plugin_id} not found. Available plugins: #{@plugins.keys}"
       end
     end
   end
